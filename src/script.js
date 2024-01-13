@@ -1,62 +1,6 @@
-import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-
-/**
- * Base
- */
-
-// Debug Importer lil gui et l'instancier ici si besoin
-
-// Canvas
-const canvas = document.querySelector('canvas.webgl')
-
-// Scene Créer la scene ici
-const scene = new THREE.Scene()
-scene.background = new THREE.Color(0x000030) // Couleur de fond
-
-/**
- * Textures Instancier le textureLoader ici pour ajouter les textures
- */
-const textureLoader = new THREE.TextureLoader()
-
-/**
- * Objects
- */
-
-// Création du Soleil
-const sunGeometry = new THREE.SphereGeometry(1, 32, 32)
-const sunMaterial = new THREE.MeshBasicMaterial({ map: textureLoader.load('/textures/sunmap.png') })
-const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial)
-scene.add(sunMesh)
-
-// Création des planètes
-const createPlanet = (radius, texturePath, position) => {
-    const planetGeometry = new THREE.SphereGeometry(radius, 32, 32);
-    const planetMaterial = new THREE.MeshLambertMaterial({ map: textureLoader.load(texturePath) });
-    const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
-    planetMesh.position.copy(position);
-    scene.add(planetMesh);
-    return planetMesh;
-};
-
-const mercury = createPlanet(0.1, '/textures/mercurymap.png', new THREE.Vector3(2, 0, 0));
-const venus = createPlanet(0.2, '/textures/venusmap.png', new THREE.Vector3(4, 0, 0));
-const earth = createPlanet(0.3, '/textures/earthmap.png', new THREE.Vector3(6, 0, 0));
-const mars = createPlanet(0.2, '/textures/marsmap.png', new THREE.Vector3(9, 0, 0));
-const jupiter = createPlanet(0.8, '/textures/jupitermap.png', new THREE.Vector3(12, 0, 0));
-const saturn = createPlanet(0.6, '/textures/saturnmap.png', new THREE.Vector3(16, 0, 0));
-const uranus = createPlanet(0.4, '/textures/uranusmap.png', new THREE.Vector3(20, 0, 0));
-const neptune = createPlanet(0.4, '/textures/neptunemap.png', new THREE.Vector3(24, 0, 0));
-
-
-// Ajout de la lumière ambiante
-const ambientLight = new THREE.AmbientLight(0x404040);
-scene.add(ambientLight);
-
-// Ajout de la lumière directionnelle
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-directionalLight.position.set(5, 5, 5);
-scene.add(directionalLight);
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 /**
  * Sizes
@@ -66,7 +10,181 @@ const sizes = {
     height: window.innerHeight
 }
 
-window.addEventListener('resize', () => {
+
+/**
+ * Base
+ */
+// Canvas
+const canvas = document.querySelector('canvas.webgl')
+
+// Scene
+const scene = new THREE.Scene()
+scene.background = new THREE.Color("#8C66E7");
+
+
+const cameraGroup = new THREE.Group()
+scene.add(cameraGroup)
+
+// Base camera
+const camera = new THREE.PerspectiveCamera(
+    75,
+    sizes.width / sizes.height,
+    0.1,
+    1000)
+camera.position.z = 8;
+camera.position.y = 2.5;
+
+cameraGroup.add(camera)
+// const helperC = new THREE.CameraHelper( camera );
+// scene.add( helperC );
+
+const light = new THREE.HemisphereLight(
+    'white',
+    'darkslategrey',
+    1.5
+);
+camera.add(light);
+
+
+/**
+ * Renderer
+ */
+const renderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    alpha: true
+})
+renderer.setSize(sizes.width, sizes.height)
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+
+/**
+ * OBJECTS
+ */
+
+// GLTF LOADER
+const gltfLoader = new GLTFLoader();
+
+// BUNNY
+let bunny = new THREE.Object3D();
+gltfLoader.load('/assets/bunny.gltf', (gltf) => {
+    bunny = gltf.scene;
+
+    bunny.scale.set(1, 1, 1)
+
+    scene.add(bunny);
+
+    addStarsAroundBunny();
+});
+
+
+
+// Function to add stars around the bunny
+function addStarsAroundBunny() {
+    const starCount = 100;
+    const minDistance = 1;
+
+    const starLoader = new GLTFLoader();
+    starLoader.load('/assets/star.gltf', (gltf) => {
+        const starGeometry = gltf.scene.children[0].geometry;
+
+        for (let i = 0; i < starCount; i++) {
+            const star = new THREE.Mesh(starGeometry, gltf.scene.children[0].material);
+
+            let validPosition = false;
+
+            while (!validPosition) {
+                const radius = Math.random() * 20;
+                const angle = Math.random() * Math.PI * 2;
+                const x = bunny.position.x + radius * Math.cos(angle);
+                const y = bunny.position.y + Math.random() * 20 - 4;
+                const z = bunny.position.z + radius * Math.sin(angle);
+
+                star.position.set(x, y, -3);
+
+                validPosition = true;
+
+                for (const otherStar of scene.children) {
+                    if (otherStar instanceof THREE.Mesh && otherStar !== star) {
+                        const distance = star.position.distanceTo(otherStar.position);
+
+                        if (distance < minDistance) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Random size
+            const scale = Math.random() * 0.5 + 0.1; // Adjust the size range as needed
+            star.scale.set(scale, scale, scale);
+
+            // Random rotation
+            star.rotation.set(Math.random() * Math.PI * 4, 0, 0);
+
+            scene.add(star);
+        }
+    });
+}
+
+
+/**z
+ * Cursor
+ */
+const cursor = {};
+cursor.x = 0;
+cursor.y = 0;
+cursor.z = 0;
+
+window.addEventListener('mousemove', (event) =>
+{
+    cursor.x = event.clientX / sizes.width - 0.5
+    cursor.y = event.clientY / sizes.height - 0.5
+})
+
+
+/**
+ * Animate
+ */
+const clock = new THREE.Clock();
+let previousTime = 0;
+const objectsDistance = 4;
+let rotateDirection = .06;
+const rotationRange = Math.PI / 3;
+
+const tick = () =>
+{
+    const elapsedTime = clock.getElapsedTime()
+    const deltaTime = elapsedTime - previousTime;
+    previousTime = elapsedTime;
+
+    if (bunny) {
+        bunny.position.y = Math.sin(Date.now() * 0.001) * 0.2;
+
+        bunny.rotation.y += 0.01 * rotateDirection;
+        if (bunny.rotation.y > rotationRange || bunny.rotation.y < -rotationRange) {
+            rotateDirection *= -1;
+        }
+    }
+
+    // Animate camera
+
+    const parallaxX = cursor.x * 0.3;
+    const parallaxY = - cursor.y * 0.3;
+    const parallaxZ = - cursor.z * 0.3;
+
+    cameraGroup.position.x += (parallaxX - cameraGroup.position.x) * 5 * deltaTime;
+    cameraGroup.position.y += (parallaxY - cameraGroup.position.y) * 5 * deltaTime;
+    cameraGroup.position.z += (parallaxZ - cameraGroup.position.z) * 5 * deltaTime;
+
+    // Render
+    renderer.render(scene, camera)
+
+    // Call tick again on the next frame
+    window.requestAnimationFrame(tick)
+}
+
+window.addEventListener('resize', () =>
+{
     // Update sizes
     sizes.width = window.innerWidth
     sizes.height = window.innerHeight
@@ -79,77 +197,4 @@ window.addEventListener('resize', () => {
     renderer.setSize(sizes.width, sizes.height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 })
-
-/**
- * Camera Ajouter une camera ici
- */
-const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 1000)
-camera.position.set(0, 20, 0);
-camera.lookAt(new THREE.Vector3(0, 0, 0));
-scene.add(camera)
-
-// Controls
-const controls = new OrbitControls(camera, canvas)
-controls.enableDamping = true
-
-/**
- * Renderer
- */
-const renderer = new THREE.WebGLRenderer({
-    canvas: canvas
-})
-renderer.setSize(sizes.width, sizes.height)
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-
-/**
- * Animate
- */
-const clock = new THREE.Clock()
-
-// Orbital periods in seconds
-const mercuryOrbitPeriod = 1; // Adjust the orbital periods as needed
-const venusOrbitPeriod = 2;
-const earthOrbitPeriod = 3;
-const marsOrbitPeriod = 4;
-const jupiterOrbitPeriod = 5;
-const saturnOrbitPeriod = 6;
-const uranusOrbitPeriod = 7;
-const neptuneOrbitPeriod = 8;
-
-const tick = () => {
-    const elapsedTime = clock.getElapsedTime();
-
-    // Update planet positions based on orbital periods
-    mercury.position.x = Math.cos(elapsedTime / mercuryOrbitPeriod) * 2;
-    mercury.position.z = Math.sin(elapsedTime / mercuryOrbitPeriod) * 2;
-
-    venus.position.x = Math.cos(elapsedTime / venusOrbitPeriod) * 4;
-    venus.position.z = Math.sin(elapsedTime / venusOrbitPeriod) * 4;
-
-    earth.position.x = Math.cos(elapsedTime / earthOrbitPeriod) * 6;
-    earth.position.z = Math.sin(elapsedTime / earthOrbitPeriod) * 6;
-
-    mars.position.x = Math.cos(elapsedTime / marsOrbitPeriod) * 9;
-    mars.position.z = Math.sin(elapsedTime / marsOrbitPeriod) * 9;
-
-    jupiter.position.x = Math.cos(elapsedTime / jupiterOrbitPeriod) * 12;
-    jupiter.position.z = Math.sin(elapsedTime / jupiterOrbitPeriod) * 12;
-
-    saturn.position.x = Math.cos(elapsedTime / saturnOrbitPeriod) * 16;
-    saturn.position.z = Math.sin(elapsedTime / saturnOrbitPeriod) * 16;
-
-    uranus.position.x = Math.cos(elapsedTime / uranusOrbitPeriod) * 20;
-    uranus.position.z = Math.sin(elapsedTime / uranusOrbitPeriod) * 20;
-
-    neptune.position.x = Math.cos(elapsedTime / neptuneOrbitPeriod) * 24;
-    neptune.position.z = Math.sin(elapsedTime / neptuneOrbitPeriod) * 24;
-
-    controls.update();
-
-    renderer.render(scene, camera);
-
-    window.requestAnimationFrame(tick);
-};
-
-
 tick()
